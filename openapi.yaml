@@ -4,7 +4,7 @@ info:
   description: Прокси-сервис для работы с Google Sheets API через сервисный аккаунт
   version: 1.0.0
 servers:
-  - url: https://your-service-url.com
+  - url: https://google-sheets-proxy-xxxxx.zeabur.app
     description: URL вашего микросервиса (замените на реальный после деплоя)
 paths:
   /:
