@@ -13,7 +13,14 @@ app.use(cors());
 // Получаем данные сервисного аккаунта из переменной окружения
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  const envVar = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (!envVar || envVar === 'undefined') {
+    console.error('GOOGLE_SERVICE_ACCOUNT environment variable is not set or is undefined');
+    serviceAccount = null;
+  } else {
+    serviceAccount = JSON.parse(envVar);
+    console.log('Successfully parsed GOOGLE_SERVICE_ACCOUNT');
+  }
 } catch (error) {
   console.error('Error parsing GOOGLE_SERVICE_ACCOUNT:', error);
   serviceAccount = null;
@@ -25,11 +32,15 @@ function getAuthClient() {
     throw new Error('GOOGLE_SERVICE_ACCOUNT environment variable is not set or is invalid');
   }
   
+  // Добавляем разрешение для Drive API для получения списка таблиц
   return new google.auth.JWT(
     serviceAccount.client_email,
     null,
     serviceAccount.private_key,
-    ['https://www.googleapis.com/auth/spreadsheets']
+    [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.readonly'
+    ]
   );
 }
 
@@ -39,15 +50,31 @@ app.get('/spreadsheets', async (req, res) => {
     const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
     
+    console.log('Requesting spreadsheets list from Google Drive API...');
+    
     const response = await drive.files.list({
       q: "mimeType='application/vnd.google-apps.spreadsheet'",
       fields: 'files(id, name)'
     });
     
+    console.log(`Found ${response.data.files.length} spreadsheets`);
     res.json(response.data.files);
   } catch (error) {
     console.error('Error listing spreadsheets:', error);
-    res.status(500).json({ error: error.message });
+    
+    // Более подробный вывод ошибки для диагностики
+    const errorDetails = {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      details: error.errors || 'No detailed errors'
+    };
+    
+    res.status(500).json({ 
+      error: error.message,
+      details: errorDetails,
+      tip: "Убедитесь, что Drive API активирован в Google Cloud Console и сервисный аккаунт имеет правильные разрешения"
+    });
   }
 });
 
@@ -116,4 +143,6 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Google Sheets API proxy server running on port ${PORT}`);
+  console.log(`Service account: ${serviceAccount ? serviceAccount.client_email : 'Not configured'}`);
+  console.log(`Using scopes: https://www.googleapis.com/auth/spreadsheets, https://www.googleapis.com/auth/drive.readonly`);
 });
